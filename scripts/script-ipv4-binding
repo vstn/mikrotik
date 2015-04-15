@@ -1,0 +1,110 @@
+:local scriptName "IPv4-Binding";
+:local leaseDNSTime "00:15:00";
+
+:local leaseActName ([:pick $leaseActMAC 0 2] . [:pick $leaseActMAC 3 5] . [:pick $leaseActMAC 6 8] . [:pick $leaseActMAC 9 11] . [:pick $leaseActMAC 12 14] . [:pick $leaseActMAC 15 17]);
+:local leaseValidation ("auto-" . $leaseServerName . "-" . $leaseActName);
+
+:local leaseServerNameLength [:len $leaseServerName];
+:local leaseFirewallList ("client-" . [:pick $leaseServerName 6 $leaseServerNameLength]);
+:local leaseFirewallTime [/ip dhcp-server get [find where name=$leaseServerName] lease-time];
+
+:local hexArray {"0"="0";"1"="1";"2"="2";"3"="3";"4"="4";"5"="5";"6"="6";"7"="7";"8"="8";"9"="9";"a"="10";"b"="11";"c"="12";"d"="13";"e"="14";"f"="15"};
+:local leaseDhcpStartHEX1 [:pick $leaseServerName ($leaseServerNameLength - 4) ($leaseServerNameLength - 3)];
+:local leaseDhcpStartHEX2 [:pick $leaseServerName ($leaseServerNameLength - 3) ($leaseServerNameLength - 2)];
+:local leaseDhcpStartDEC ($hexArray->$leaseDhcpStartHEX1 * 16 + $hexArray->$leaseDhcpStartHEX2);
+:local leaseDhcpMaskHEX1 [:pick $leaseServerName ($leaseServerNameLength - 2) ($leaseServerNameLength - 1)];
+:local leaseDhcpMaskHEX2 [:pick $leaseServerName ($leaseServerNameLength - 1) ($leaseServerNameLength - 0)];
+:local leaseDhcpMaskDEC ($hexArray->$leaseDhcpMaskHEX1 * 16 + $hexArray->$leaseDhcpMaskHEX2);
+:local leaseDhcpBaseLength ([:find $leaseActIP "." ([:len $leaseActIP] - 5)] + 1);
+:local leaseDhcpBase [:pick $leaseActIP 0 $leaseDhcpBaseLength];
+:local leaseDhcpSubnet ($leaseDhcpBase . $leaseDhcpStartDEC . "/" . $leaseDhcpMaskDEC);
+:local leaseDomain [/ip dhcp-server network get [find where address=$leaseDhcpSubnet] domain];
+
+:local FQDN;
+:local isFree;
+
+:if ($leaseBound = 1) do={
+	:log debug ($scriptName . ": 1. [" . $leaseServerName . "] has assigned " . $leaseActIP . " to " . $leaseActMAC);
+
+	/ip firewall address-list;
+	:if ([print count-only where list=$leaseFirewallList address=$leaseActIP] = 0) do={
+		:log debug ($scriptName . ": 2. [" . $leaseServerName . "] has found that " . $leaseFirewallList . " doesn't contain " . $leaseActIP);
+		
+		/ip firewall address-list add list=$leaseFirewallList address=$leaseActIP dynamic=yes timeout=$leaseFirewallTime;
+		:log debug ($scriptName . ": 3. [" . $leaseServerName . "] has added the temporary client " . $leaseActIP . " to " . $leaseFirewallList);
+	} else={
+		:log debug ($scriptName . ": 2. [" . $leaseServerName . "] has found that " . $leaseFirewallList . " already contains " . $leaseActIP);
+
+		:if ([get [find where list=$leaseFirewallList address=$leaseActIP dynamic=yes] timeout] = "") do={
+			:log debug ($scriptName . ": 3. [" . $leaseServerName . "] has found that " . $leaseActIP . " is a permanent client (static DHCP binding)");
+		} else={
+			/ip firewall address-list set [find where list=$leaseFirewallList address=$leaseActIP dynamic=yes] timeout=$leaseFirewallTime;
+			:log debug ($scriptName . ": 3. [" . $leaseServerName . "] has updated the temporary client " . $leaseActIP . " in " . $leaseFirewallList);
+		}
+	}
+
+	/ip dhcp-server lease;
+	:if ([:len [get [find where active-mac-address=$leaseActMAC active-server=$leaseServerName] host-name]] > 0) do={
+		:set FQDN ([get [find where active-mac-address=$leaseActMAC active-server=$leaseServerName] host-name] . "." . $leaseDomain);
+		:log debug ($scriptName . ": 4. [" . $leaseServerName . "] has ensured that " . $leaseActMAC . " has an authentic host-name");
+	} else={
+		:set FQDN $leaseActName;
+		:log debug ($scriptName . ": 4. [" . $leaseServerName . "] has generated an artificial MAC-based host-name for " . $leaseActMAC);
+	}		
+	
+	:if ([:len $FQDN] > 0) do={	
+		/ip dns static;
+		:if ([print count-only where name=$FQDN] > 0) do={
+			:log debug ($scriptName . ": 5. [" . $leaseServerName . "] has found that the static DNS list already contains " . $FQDN);
+		 
+			:if ([get [find where name=$FQDN] comment] = $leaseValidation ) do={
+				:log debug ($scriptName . ": 6. [" . $leaseServerName . "] has ensured that " . $FQDN . " has a valid comment token");
+				
+				:if ([get [find where name=$FQDN] address] != $leaseActIP) do={
+					/ip dns static set [find where name=$FQDN] address=$leaseActIP ttl=$leaseDNSTime;
+					:log info ($scriptName . ": [" . $leaseServerName . "] has updated the static DNS entry: " . $FQDN . " -> ". $leaseActIP . " (" . $leaseActMAC . ")");
+				} else={
+					:log info ($scriptName . ": [" . $leaseServerName . "] has validated the static DNS entry: " . $FQDN . " -> ". $leaseActIP . " (" . $leaseActMAC . ")");
+				}
+			} else={
+				:log info ($scriptName . ": [" . $leaseServerName . "] has found that " . $FQDN . " is a manual DNS binding (invalid comment token)");
+			}
+		} else={
+			:log debug ($scriptName . ": 5. [" . $leaseServerName . "] has found that the static DNS list doesn't contain " . $FQDN);
+
+			/ip dns static add name=$FQDN address=$leaseActIP ttl=$leaseDNSTime comment=$leaseValidation;
+			:log info ($scriptName . ": [" . $leaseServerName . "] has added the static DNS entry: " . $FQDN . " -> " . $leaseActIP . " (" . $leaseActMAC . ")") ;
+		}
+	} else={
+		:log debug ($scriptName . ": 5. [" . $leaseServerName . "] has encountered an unknown problem with the host-name (zero length)");
+	}
+} else={
+	:log debug ($scriptName . ": 1. [" . $leaseServerName . "] has deassigned " . $leaseActIP . " from " . $leaseActMAC);
+
+	/ip firewall address-list;
+	:if ([print count-only where list=$leaseFirewallList address=$leaseActIP dynamic=yes] = 0) do={
+		:log debug ($scriptName . ": 2. [" . $leaseServerName . "] has found that " . $leaseFirewallList . " doesn't contain " . $leaseActIP);
+
+		:log debug ($scriptName . ": 3. [" . $leaseServerName . "] has failed to remove " . $leaseActIP . " from " . $leaseFirewallList);
+	} else={
+		:log debug ($scriptName . ": 2. [" . $leaseServerName . "] has found that " . $leaseFirewallList . " already contains " . $leaseActIP);
+
+		:if ([get [find where list=$leaseFirewallList address=$leaseActIP dynamic=yes] timeout] = "") do={
+			:log debug ($scriptName . ": 3. [" . $leaseServerName . "] has found that " . $leaseActIP . " is a permanent client (static DNS binding)");
+		} else={
+			/ip firewall address-list remove [find where list=$leaseFirewallList address=$leaseActIP dynamic=yes];
+			:log debug ($scriptName . ": 3. [" . $leaseServerName . "] has removed " . $leaseActIP . " from " . $leaseFirewallList);
+		}
+	}
+	
+	/ip dns static;
+	:if ( [print count-only where comment=$leaseValidation] > 0) do={
+		:set FQDN ([get [find where comment=$leaseValidation] name]);
+		:log debug ($scriptName . ": 4. [" . $leaseServerName . "] has found that the static DNS list already contains " . $FQDN);
+
+		/ip dns static remove [find where comment=$leaseValidation];
+		:log info ($scriptName . ": [" . $leaseServerName . "] has removed the static DNS entry: " . $FQDN . " -> " .$leaseActIP . " (" . $leaseActMAC . ")");
+	} else={
+		:log info ($scriptName . ": [" . $leaseServerName . "] has found that the static DNS list doesn't contain the entry to remove");
+	}
+}
