@@ -1,0 +1,13 @@
+:local mkinsideaddr "inside.vstn.info";
+:local mkinsidemode "report-netwatch";
+:local mkidentity [/system identity get name];
+:local mkfetchurl;
+
+:global mkp1;
+:global mkp2;
+
+:set mkfetchurl ("http://".$mkinsideaddr."/\3Fdevice=".$mkidentity."&mode=".$mkinsidemode."&p1=".$mkp1."&p2=".$mkp2);
+
+/tool fetch keep-result=no url=$mkfetchurl;
+
+:log info ("SCRIPT [Report-Netwatch] has been successfully executed with P1='".$mkp1."' and P2='".$mkp2."'.");
