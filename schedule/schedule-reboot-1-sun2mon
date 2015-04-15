@@ -1,0 +1,3 @@
+/system reboot;
+
+:log info ("SCHEDULE [Reboot #1 Sunday-Monday] has been successfully executed.");
