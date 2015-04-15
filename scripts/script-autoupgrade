@@ -3,4 +3,4 @@ check-for-updates
 :delay 2s;
 :if ( [get current-version] != [get latest-version]) do={ upgrade }
 
-:log info "SCRIPT [AutoUpgrade] has been successfully executed.";
+:log info ("SCRIPT [AutoUpgrade] has been successfully executed.");
