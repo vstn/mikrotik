@@ -1,0 +1,24 @@
+:local mkprefix "/backups/";
+:local mkidentity [/system identity get name];
+:local mkdate [/system clock get date];
+:local mktime [/system clock get time];
+:local mksuffix ".backup";
+
+:local mkdd [:pick $mkdate 4 6];
+:local mkmm [:pick $mkdate 0 3];
+:local mkyy [:pick $mkdate 7 11];
+:local mkhh [:pick $mktime 0 2];
+:local mknn [:pick $mktime 3 5];
+:local mkss [:pick $mktime 6 8];
+:local mkfilename;
+:local months [:toarray "jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec"];
+
+:for i from=0 to=([:len $months] - 1) do={
+   :if ([:tostr [:pick $months $i]] = $mkmm) do={:set mkmm ($i + 1) } 
+}
+
+:set mkfilename ($mkprefix.$mkidentity."-".$mkyy.$mkmm.$mkdd."-".$mkhh.$mknn.$mksuffix);
+
+/system backup save dont-encrypt=yes name=$mkfilename;
+
+/log info ("SCRIPT [AutoBackup]: File ".$mkfilename." has been successfully created");
