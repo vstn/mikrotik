@@ -1,0 +1,10 @@
+:local mkinsideaddr "inside.vstn.info";
+:local mkinsidemode "ipv4-accounting";
+:local mkidentity [/system identity get name];
+:local mkfetchurl;
+
+:set mkfetchurl ("http://".$mkinsideaddr."/\3Fdevice=".$mkidentity."&mode=".$mkinsidemode);
+
+/tool fetch keep-result=no url=$mkfetchurl;
+
+:log info ("SCRIPT [IPv4-Accounting] has been successfully executed.");
