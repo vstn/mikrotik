@@ -1,0 +1,3 @@
+/system script run [find where name="script-ipv4-accounting"];
+
+:log info ("SCHEDULE [IPv4-Accounting] has been successfully executed.");
