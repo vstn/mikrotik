@@ -1,0 +1,3 @@
+/system script run [find where name="script-autoupgrade"];
+
+:log info ("SCHEDULE [AutoUpgrade] has been successfully executed.");
