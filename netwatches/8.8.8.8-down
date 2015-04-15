@@ -1,0 +1,11 @@
+:global mkp0 true;
+:global mkp1 "8.8.8.8";
+:global mkp2 "down";
+
+/system script run [find where name="script-report-netwatch"];
+
+:delay 30s;
+
+:set mkp0;
+:set mkp1;
+:set mkp2;
