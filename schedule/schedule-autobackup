@@ -1,0 +1,3 @@
+/system script run [find where name="script-autobackup"];
+
+:log info ("SCHEDULE [AutoBackup] has been successfully executed.");
